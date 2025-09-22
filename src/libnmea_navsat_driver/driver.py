@@ -78,6 +78,8 @@ class RosNMEADriver(object):
         self.vel_pub = rospy.Publisher('vel', TwistStamped, queue_size=1)
         self.heading_pub = rospy.Publisher(
             'heading', QuaternionStamped, queue_size=1)
+        self.imu_pub = rospy.Publisher(
+            'gnss_rpy', QuaternionStamped, queue_size=1)
         self.use_GNSS_time = rospy.get_param('~use_GNSS_time', False)
         if not self.use_GNSS_time:
             self.time_ref_pub = rospy.Publisher(
@@ -197,7 +199,7 @@ class RosNMEADriver(object):
 
             if self.use_GNSS_time:
                 if math.isnan(data['utc_time'][0]):
-                    rospy.logwarn("Time in the NMEA sentence is NOT valid")
+                    rospy.logwarn_throttle(5,"Time in the NMEA sentence is NOT valid")
                     return False
                 current_fix.header.stamp = rospy.Time(data['utc_time'][0], data['utc_time'][1])
 
@@ -268,7 +270,7 @@ class RosNMEADriver(object):
 
             if self.use_GNSS_time:
                 if math.isnan(data['utc_time'][0]):
-                    rospy.logwarn("Time in the NMEA sentence is NOT valid")
+                    rospy.logwarn_throttle(5,"Time in the NMEA sentence is NOT valid")
                     return False
                 current_fix.header.stamp = rospy.Time(data['utc_time'][0], data['utc_time'][1])
 
@@ -333,6 +335,24 @@ class RosNMEADriver(object):
                 current_heading.quaternion.z = q[2]
                 current_heading.quaternion.w = q[3]
                 self.heading_pub.publish(current_heading)
+        elif 'AT' in parsed_sentence:
+            data = parsed_sentence['AT']
+            if data['heading']:
+                current_imu = QuaternionStamped()
+                if self.use_GNSS_time:
+                    if math.isnan(data['utc_time'][0]):
+                        rospy.logwarn_throttle(5, "Time in the NMEA sentence is NOT valid")
+                        return False
+                    current_imu.header.stamp = rospy.Time(data['utc_time'][0], data['utc_time'][1])
+                else:
+                    current_imu.header.stamp = current_time
+                current_imu.header.frame_id = frame_id
+                q = quaternion_from_euler(math.radians(data['roll']), math.radians(data['pitch']), math.radians(data['heading']))
+                current_imu.quaternion.x = q[0]
+                current_imu.quaternion.y = q[1]
+                current_imu.quaternion.z = q[2]
+                current_imu.quaternion.w = q[3]
+                self.imu_pub.publish(current_imu)
         else:
             return False
 
